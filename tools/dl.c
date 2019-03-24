@@ -23,10 +23,8 @@
 #include <io.h>
 #include <fcntl.h>
 #endif
-// #ifdef __GLIBC__
-  #include <glib.h>
-  // #include <glib/gi18n.h>
-// #endif
+#include <glib.h>
+// #include <glib/gi18n.h>
 
 static gchar *opt_path = ".";
 static gboolean opt_stream = FALSE;
