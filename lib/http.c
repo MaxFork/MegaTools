@@ -23,7 +23,7 @@
 #include <curl/curl.h>
 #include <string.h>
 /*
-Warning solved by Max :
+Warning solved by Max Base (https://github.com/BaseMax) :
 
 lib/http.c: In function ‘http_new’:
 lib/http.c:161:4: warning: implicit declaration of function ‘exit’ [-Wimplicit-function-declaration]
