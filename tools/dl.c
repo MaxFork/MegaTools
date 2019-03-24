@@ -23,9 +23,10 @@
 #include <io.h>
 #include <fcntl.h>
 #endif
-// Added by Max Base
-#include <glib.h>
-// #include <glib/gi18n.h>
+// #ifdef __GLIBC__
+  #include <glib.h>
+  // #include <glib/gi18n.h>
+// #endif
 
 static gchar *opt_path = ".";
 static gboolean opt_stream = FALSE;
