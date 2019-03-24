@@ -87,3 +87,4 @@ EXTRA_DIST += \
 	docs/upload-options.txt \
 	docs/asciidoc.conf \
 	docs/Makefile
+
