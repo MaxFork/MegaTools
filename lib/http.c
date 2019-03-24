@@ -22,6 +22,21 @@
 #include "config.h"
 #include <curl/curl.h>
 #include <string.h>
+/*
+Warning solved by Max :
+
+lib/http.c: In function ‘http_new’:
+lib/http.c:161:4: warning: implicit declaration of function ‘exit’ [-Wimplicit-function-declaration]
+    exit(1);
+    ^
+lib/http.c:161:4: warning: incompatible implicit declaration of built-in function ‘exit’
+lib/http.c:161:4: note: include ‘<stdlib.h>’ or provide a declaration of ‘exit’
+  CC       lib/mega.o
+lib/mega.c: In function ‘tman_worker_upload_chunk’:
+lib/mega.c:3268:2: warning: dereferencing type-punned pointer will break strict-aliasing rules [-Wstrict-aliasing]
+  *((guint64 *)&iv[8]) = GUINT64_TO_BE((guint64)(c->offset / 16)); // this is ok, because chunks are 16b aligned
+*/
+#include <stdlib.h> // exit
 
 char* http_netif = NULL;
 int http_ipproto = HTTP_IPPROTO_ANY;
