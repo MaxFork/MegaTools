@@ -23,6 +23,9 @@
 #include <io.h>
 #include <fcntl.h>
 #endif
+// Added by Max Base
+#include <glib.h>
+// #include <glib/gi18n.h>
 
 static gchar *opt_path = ".";
 static gboolean opt_stream = FALSE;
@@ -380,6 +383,14 @@ static int dl_main(int ac, char *av[])
 		gc_free gchar *handle = NULL;
 		gc_free gchar *specific = NULL;
 		gc_free gchar *link = tool_convert_filename(av[i], FALSE);
+
+		// Codes can move to tools.c (tool convert filename function)
+		link = g_uri_unescape_string(link, NULL);
+		/*
+			INPUT: https://mega.nz/#%21H2pDmAgC!isXGprskZbLP4KnLNuNHcbI279s6FnLcsj8Vydm_sio
+			OUTPUT: https://mega.nz/#!H2pDmAgC!isXGprskZbLP4KnLNuNHcbI279s6FnLcsj8Vydm_sio
+		*/
+		// link = g_uri_unescape_string("https://mega.nz/#%21H2pDmAgC!isXGprskZbLP4KnLNuNHcbI279s6FnLcsj8Vydm_sio", NULL);
 
 		if (g_regex_match(file_regex, link, 0, &m1)) {
 			handle = g_match_info_fetch(m1, 1);
