@@ -70,9 +70,9 @@ man5_MANS = $(addprefix docs/,$(addsuffix .5, $(MAN5)))
 
 EXTRA_DIST += $(man1_MANS) $(man5_MANS)
 
-EXTRA_DIST += LICENSE HACKING contrib/bash-completion/megatools
+EXTRA_DIST += LICENSE contrib/bash-completion/megatools
 
-doc_DATA = LICENSE NEWS TODO README INSTALL HACKING
+doc_DATA = LICENSE NEWS TODO README INSTALL
 
 EXTRA_DIST += \
 	docs/auth-options.txt \

@@ -21,12 +21,13 @@ Part of the man:megatools[1] suite of commands.
 BUGS
 ----
 
-Report bugs at link:https://github.com/megous/megatools[] or megous@megous.com.
+Report bugs to megatools@megous.com. Your message will end up in a public
+archive, so be careful what you say or send.
 
 
 AUTHOR
 ------
 
-Megatools was written by Ondrej Jirman <megous@megous.com>, 2013-2018.
+Megatools was written by Ondrej Jirman <megatools@megous.com>, 2013-2019.
 
 Official website is link:http://megatools.megous.com[].
