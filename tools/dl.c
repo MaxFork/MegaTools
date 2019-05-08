@@ -214,7 +214,7 @@ static gint compare_node(struct mega_node *a, struct mega_node *b)
 	return 0;
 }
 
-GSList* prune_children(GSList* nodes)
+static GSList* prune_children(GSList* nodes)
 {
 	GSList* pruned = NULL, *it, *it2;
 
@@ -245,7 +245,7 @@ prune_node:;
 	return g_slist_reverse(pruned);
 }
 
-GSList* pick_nodes(void)
+static GSList* pick_nodes(void)
 {
 	GSList *nodes = mega_session_ls(s, "/", TRUE), *it, *chosen_nodes;
 	int position = 2;
