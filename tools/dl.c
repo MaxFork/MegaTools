@@ -79,7 +79,7 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file)
 			return FALSE;
 		}
 	} else {
-		if (g_file_query_file_type(parent, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL) != G_FILE_TYPE_DIRECTORY) {
+		if (g_file_query_file_type(parent, 0, NULL) != G_FILE_TYPE_DIRECTORY) {
 			g_printerr("ERROR: Can't create local directory %s: a file exists there!\n", parent_path);
 			return FALSE;
 		}
@@ -437,8 +437,7 @@ static int dl_main(int ac, char *av[])
 					struct mega_node *root_node = l->data;
 
 					gc_object_unref GFile *local_dir = g_file_new_for_path(opt_path);
-					if (g_file_query_file_type(local_dir, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-								   NULL) == G_FILE_TYPE_DIRECTORY) {
+					if (g_file_query_file_type(local_dir, 0, NULL) == G_FILE_TYPE_DIRECTORY) {
 						if (opt_choose_files) {
 							if (!dl_sync_dir_choose(local_dir))
 								status = 1;
