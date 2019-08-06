@@ -1,0 +1,11 @@
+option('symlinks',
+  type: 'boolean',
+  value: false,
+  description: 'Install symlinks for compatibility with old megatools commands (megals, megacopy, megadl, ...)'
+)
+
+option('man',
+  type: 'boolean',
+  value: true,
+  description: 'Build and install manual pages.'
+)
