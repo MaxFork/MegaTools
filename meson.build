@@ -73,9 +73,9 @@ endforeach
 
 # build docs
 
-asciidoc = find_program('asciidoc')
-db2x_xsltproc = find_program('db2x_xsltproc')
-db2x_manxml = find_program('db2x_manxml')
+asciidoc = find_program('asciidoc', required: false)
+db2x_xsltproc = find_program('db2x_xsltproc', required: false)
+db2x_manxml = find_program('db2x_manxml', required: false)
 enable_manpages = asciidoc.found() and db2x_xsltproc.found() and db2x_manxml.found()
 
 if enable_manpages and get_option('man')
