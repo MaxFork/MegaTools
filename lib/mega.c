@@ -2310,17 +2310,76 @@ gboolean mega_session_open(struct mega_session *s, const gchar *un, const gchar 
 
 	if (!is_loggedin) {
 		gc_free gchar *un_lower = g_ascii_strdown(un, -1);
-		gc_free gchar *uh = make_username_hash(un_lower, s->password_key);
 
 		g_free(s->sid);
 		s->sid = NULL;
 
-		// login user
-		gc_free gchar *login_node =
-			api_call(s, 'o', NULL, &local_err, "[{a:us, user:%s, uh:%s}]", un_lower, uh);
-		if (!login_node) {
+		// pre login
+		gc_free gchar *pre_login_node =
+			api_call(s, 'o', NULL, &local_err, "[{a:us0, user:%s}]", un_lower);
+		if (!pre_login_node) {
 			g_propagate_error(err, local_err);
 			return FALSE;
+		}
+
+		gint user_v = s_json_get_member_int(pre_login_node, "v", 1);
+
+		gc_free gchar *login_node;
+
+		if (user_v == 2) {
+
+			// salt
+			gc_free gchar *b64_salt = s_json_get_member_string(pre_login_node, "s");
+
+			if (b64_salt == NULL) {
+				g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Invalid salt");
+				return FALSE;
+			}
+
+			gsize len;
+			gc_free gchar *salt = base64urldecode(b64_salt, &len);
+
+			if (salt == NULL) {
+				g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Invalid salt: Unable to decode");
+				return FALSE;
+			}
+
+			// derive key
+			guchar key[32];
+
+			PKCS5_PBKDF2_HMAC(pw, strlen(pw),
+				salt, strlen(salt),
+				100000, EVP_sha512(),
+				sizeof(key), key);
+
+			// Derived key contains master key (s->password_key) (0-16) and password hash (16-32)
+			const char *authKey = key + 16;
+
+			gc_free gchar *b64_authKey = base64urlencode(authKey, 16);
+
+			// login user
+			login_node =
+				api_call(s, 'o', NULL, &local_err, "[{a:us, user:%s, uh:%s}]", un_lower, b64_authKey);
+			if (!login_node) {
+				g_propagate_error(err, local_err);
+				return FALSE;
+			}
+
+			// set s->password_key
+			// Derived key contains master key (s->password_key) (0-16) and password hash (16-32)
+			memcpy(s->password_key, key, 16);
+			//s->password_key[16] = '\0';
+
+		} else {
+			gc_free gchar *uh = make_username_hash(un_lower, s->password_key);
+
+			// login user
+			login_node =
+				api_call(s, 'o', NULL, &local_err, "[{a:us, user:%s, uh:%s}]", un_lower, uh);
+			if (!login_node) {
+				g_propagate_error(err, local_err);
+				return FALSE;
+			}
 		}
 
 		gc_free gchar *login_k = s_json_get_member_string(login_node, "k");
