@@ -109,7 +109,9 @@ struct mega_session {
 	gchar *rid;
 	GHashTable *api_url_params;
 
+	gchar *password_salt_v2; /* as returned from mega.nz (base64 string) */
 	guchar *password_key;
+	guchar *password_key_save; /* password key for session saver */
 	guchar *master_key;
 	struct rsa_key rsa_key;
 
@@ -2281,147 +2283,173 @@ gboolean mega_session_open_exp_folder(struct mega_session *s, const gchar *n, co
 // }}}
 // {{{ mega_session_open
 
-gboolean mega_session_open(struct mega_session *s, const gchar *un, const gchar *pw, const gchar *sid, GError **err)
+// this has side effect of the current session being closed
+static gboolean mega_session_load(struct mega_session *s,
+				  const gchar *un, const gchar *pw, gint max_age,
+				  gchar **last_sid, gchar** last_pwsalt_v2,
+				  GError **err);
+
+gboolean mega_session_open(struct mega_session *s, const gchar *un, const gchar *pw,
+			   gint max_age, gboolean *is_new_session, GError **err)
 {
 	GError *local_err = NULL;
 	gboolean is_loggedin = FALSE;
+	gc_free gchar* sid = NULL;
+	gc_free gchar* pwsalt_v2 = NULL;
+	gint login_variant = 0;
+	gc_free gchar *un_lower = NULL;
+	gc_free gchar *uh = NULL;
 
 	g_return_val_if_fail(s != NULL, FALSE);
 	g_return_val_if_fail(un != NULL, FALSE);
 	g_return_val_if_fail(pw != NULL, FALSE);
 	g_return_val_if_fail(err == NULL || *err == NULL, FALSE);
 
+	// try to load cached session data first
+	if (mega_session_load(s, un, pw, max_age, &sid, &pwsalt_v2, NULL)) {
+		*is_new_session = FALSE;
+		return TRUE;
+	}
+
+	*is_new_session = TRUE;
+
+	// session load failed, clean session data
 	mega_session_close(s);
+	s->password_key_save = make_password_key(pw);
+	un_lower = g_ascii_strdown(un, -1);
 
-	//g_print("%s %s %s\n", un, pw, sid);
-
-	// make password key
-	g_free(s->password_key);
-	s->password_key = make_password_key(pw);
-
-	// if we have existing session id, just check with the server if session is
-	// active, and download keys and user info
+	// now if mega_session_load found a previous expired cache file, it will
+	// return sid and pwsalt_v2 that we can try to re-use
 	if (sid) {
+		// if load_session returned sid, existence of pwsalt_v2 is
+		// enough to determine login variant
+		login_variant = pwsalt_v2 ? 2 : 0;
+
 		g_free(s->sid);
 		s->sid = g_strdup(sid);
 
-		is_loggedin = mega_session_get_user(s, NULL);
-	}
-
-	if (!is_loggedin) {
-		gc_free gchar *un_lower = g_ascii_strdown(un, -1);
-
-		g_free(s->sid);
-		s->sid = NULL;
-
-		// pre login
-		gc_free gchar *pre_login_node =
-			api_call(s, 'o', NULL, &local_err, "[{a:us0, user:%s}]", un_lower);
+		g_free(s->password_salt_v2);
+		s->password_salt_v2 = g_strdup(pwsalt_v2);
+	} else {
+		// no previous session data found, we need to call us0 to determine the login
+		// variant in use
+		gc_free gchar *pre_login_node =	api_call(s, 'o', NULL, &local_err, "[{a:us0, user:%s}]", un_lower);
 		if (!pre_login_node) {
 			g_propagate_error(err, local_err);
 			return FALSE;
 		}
 
-		gint user_v = s_json_get_member_int(pre_login_node, "v", 1);
-
-		gc_free gchar *login_node;
-
-		if (user_v == 2) {
-
-			// salt
-			gc_free gchar *b64_salt = s_json_get_member_string(pre_login_node, "s");
-
-			if (b64_salt == NULL) {
-				g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Invalid salt");
+		login_variant = s_json_get_member_int(pre_login_node, "v", 0);
+		if (login_variant == 2) {
+			// get the password salt for the login v2
+			g_free(pwsalt_v2);
+			pwsalt_v2 = s_json_get_member_string(pre_login_node, "s");
+			if (pwsalt_v2 == NULL) {
+				g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Missing salt (v2)");
 				return FALSE;
 			}
 
-			gsize len;
-			gc_free gchar *salt = base64urldecode(b64_salt, &len);
-
-			if (salt == NULL) {
-				g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Invalid salt: Unable to decode");
-				return FALSE;
-			}
-
-			// derive key
-			guchar key[32];
-
-			PKCS5_PBKDF2_HMAC(pw, strlen(pw),
-				salt, strlen(salt),
-				100000, EVP_sha512(),
-				sizeof(key), key);
-
-			// Derived key contains master key (s->password_key) (0-16) and password hash (16-32)
-			const char *authKey = key + 16;
-
-			gc_free gchar *b64_authKey = base64urlencode(authKey, 16);
-
-			// login user
-			login_node =
-				api_call(s, 'o', NULL, &local_err, "[{a:us, user:%s, uh:%s}]", un_lower, b64_authKey);
-			if (!login_node) {
-				g_propagate_error(err, local_err);
-				return FALSE;
-			}
-
-			// set s->password_key
-			// Derived key contains master key (s->password_key) (0-16) and password hash (16-32)
-			memcpy(s->password_key, key, 16);
-			//s->password_key[16] = '\0';
-
-		} else {
-			gc_free gchar *uh = make_username_hash(un_lower, s->password_key);
-
-			// login user
-			login_node =
-				api_call(s, 'o', NULL, &local_err, "[{a:us, user:%s, uh:%s}]", un_lower, uh);
-			if (!login_node) {
-				g_propagate_error(err, local_err);
-				return FALSE;
-			}
+			g_free(s->password_salt_v2);
+			s->password_salt_v2 = g_strdup(pwsalt_v2);
 		}
-
-		gc_free gchar *login_k = s_json_get_member_string(login_node, "k");
-		gc_free gchar *login_privk = s_json_get_member_string(login_node, "privk");
-		gc_free gchar *login_csid = s_json_get_member_string(login_node, "csid");
-
-		// decrypt master key
-		gc_free guchar *master_key = b64_aes128_decrypt(login_k, s->password_key, NULL);
-		if (!master_key) {
-			g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Can't read master key during login");
-			return FALSE;
-		}
-
-		// decrypt private key with master key
-		struct rsa_key privk;
-		memset(&privk, 0, sizeof(privk));
-		if (!b64_aes128_decrypt_privk(login_privk, master_key, &privk)) {
-			g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Can't read private key during login");
-			rsa_key_free(&privk);
-			return FALSE;
-		}
-
-		// decrypt session id
-		gsize sid_len = 0;
-		gc_free guchar *sid = b64_rsa_decrypt(login_csid, &privk, &sid_len);
-		if (!sid || sid_len < 43) {
-			g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Can't read session id during login");
-			rsa_key_free(&privk);
-			return FALSE;
-		}
-
-		// save session id
-		g_free(s->sid);
-		s->sid = base64urlencode(sid, 43);
-
-		// cleanup
-		rsa_key_free(&privk);
-
-		return mega_session_get_user(s, err);
 	}
 
-	return TRUE;
+	// session is not valid or is missing, we need to login again via 'us'
+	// call
+
+	if (login_variant == 2) {
+		// login variant 2:
+		// - uses PKCS5_PBKDF2_HMAC which requires a salt that is generated during registration
+		//   and stored on the server (also returned by 'us0' call in the 's' field)
+		// - PKCS5_PBKDF2_HMAC produces a 32byte value:
+		//   - first half is a password key
+		//   - second half is user hash for the 'us' call
+
+		// decode salt from base64
+		gsize salt_len;
+		gc_free gchar *salt = base64urldecode(pwsalt_v2, &salt_len);
+		if (salt == NULL) {
+			g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Failed to decode salt (v2)");
+			return FALSE;
+		}
+
+		// derive password key and user hash
+		guchar key[32];
+		PKCS5_PBKDF2_HMAC(pw, strlen(pw),
+				  salt, salt_len,
+				  100000, EVP_sha512(),
+				  sizeof(key), key);
+
+		g_free(s->password_key);
+		s->password_key = g_memdup(key, 16);
+
+		uh = base64urlencode(key + 16, 16);
+	} else {
+		// make password key and user hash for v1 login
+		g_free(s->password_key);
+		s->password_key = make_password_key(pw);
+
+		uh = make_username_hash(un_lower, s->password_key);
+	}
+
+	if (uh == NULL) {
+		g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Faield to encode user hash");
+		return FALSE;
+	}
+
+	if (sid) {
+		// try to fetch user data, this will verify the session id
+		if (mega_session_get_user(s, NULL))
+			return TRUE;
+
+		g_free(s->sid);
+		s->sid = NULL;
+	}
+
+	// login user
+	gc_free gchar *login_node = api_call(s, 'o', NULL, &local_err, "[{a:us, user:%s, uh:%s}]", un_lower, uh);
+	if (!login_node) {
+		g_propagate_error(err, local_err);
+		return FALSE;
+	}
+
+	gc_free gchar *login_k = s_json_get_member_string(login_node, "k");
+	gc_free gchar *login_privk = s_json_get_member_string(login_node, "privk");
+	gc_free gchar *login_csid = s_json_get_member_string(login_node, "csid");
+
+	// decrypt master key
+	gc_free guchar *master_key = b64_aes128_decrypt(login_k, s->password_key, NULL);
+	if (!master_key) {
+		g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Can't read master key during login");
+		return FALSE;
+	}
+
+	// decrypt private key with master key
+	struct rsa_key privk;
+	memset(&privk, 0, sizeof(privk));
+	if (!b64_aes128_decrypt_privk(login_privk, master_key, &privk)) {
+		g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Can't read private key during login");
+		rsa_key_free(&privk);
+		return FALSE;
+	}
+
+	// decrypt session id
+	gsize sid_len = 0;
+	gc_free guchar *sid_binary = b64_rsa_decrypt(login_csid, &privk, &sid_len);
+	if (!sid_binary || sid_len < 43) {
+		g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Can't read session id during login");
+		rsa_key_free(&privk);
+		return FALSE;
+	}
+
+	// save session id
+	g_free(s->sid);
+	s->sid = base64urlencode(sid_binary, 43);
+
+	// cleanup
+	rsa_key_free(&privk);
+
+	return mega_session_get_user(s, err);
 }
 
 // }}}
@@ -2432,6 +2460,8 @@ void mega_session_close(struct mega_session *s)
 	g_return_if_fail(s != NULL);
 
 	g_free(s->password_key);
+	g_free(s->password_key_save);
+	g_free(s->password_salt_v2);
 	g_free(s->master_key);
 	g_free(s->sid);
 	rsa_key_free(&s->rsa_key);
@@ -2445,6 +2475,8 @@ void mega_session_close(struct mega_session *s)
 	g_hash_table_remove_all(s->api_url_params);
 
 	s->password_key = NULL;
+	s->password_key_save = NULL;
+	s->password_salt_v2 = NULL;
 	s->master_key = NULL;
 	s->sid = NULL;
 	s->user_handle = NULL;
@@ -4935,6 +4967,7 @@ gboolean mega_session_save(struct mega_session *s, GError **err)
 	s_json_gen_member_int(gen, "last_refresh", s->last_refresh);
 
 	s_json_gen_member_string(gen, "sid", s->sid);
+	s_json_gen_member_string(gen, "password_salt_v2", s->password_salt_v2);
 	s_json_gen_member_bytes(gen, "password_key", s->password_key, 16);
 	s_json_gen_member_bytes(gen, "master_key", s->master_key, 16);
 	s_json_gen_member_rsa_key(gen, "rsa_key", &s->rsa_key);
@@ -4972,7 +5005,7 @@ gboolean mega_session_save(struct mega_session *s, GError **err)
 		print_node(cache_data, "SAVE CACHE: ");
 
 	gc_free gchar *tmp = g_strconcat("MEGA", cache_data, NULL);
-	gc_free gchar *cipher = b64_aes128_cbc_encrypt_str(tmp, s->password_key);
+	gc_free gchar *cipher = b64_aes128_cbc_encrypt_str(tmp, s->password_key_save);
 
 	if (!g_file_set_contents(path, cipher, -1, &local_err)) {
 		g_propagate_error(err, local_err);
@@ -4985,8 +5018,10 @@ gboolean mega_session_save(struct mega_session *s, GError **err)
 // }}}
 // {{{ mega_session_load
 
-gboolean mega_session_load(struct mega_session *s, const gchar *un, const gchar *pw, gint max_age, gchar **last_sid,
-			   GError **err)
+static gboolean mega_session_load(struct mega_session *s,
+				  const gchar *un, const gchar *pw, gint max_age,
+				  gchar **last_sid, gchar** last_pwsalt_v2,
+				  GError **err)
 {
 	GError *local_err = NULL;
 	gc_free gchar *cipher = NULL;
@@ -4997,6 +5032,7 @@ gboolean mega_session_load(struct mega_session *s, const gchar *un, const gchar 
 	g_return_val_if_fail(err == NULL || *err == NULL, FALSE);
 
 	mega_session_close(s);
+	s->password_key_save = make_password_key(pw);
 
 	// calculate cache file path
 	gc_free gchar *un_lower = g_ascii_strdown(un, -1);
@@ -5012,9 +5048,8 @@ gboolean mega_session_load(struct mega_session *s, const gchar *un, const gchar 
 	}
 
 	// calculate password key
-	gc_free guchar *password_key = make_password_key(pw);
 	gsize len = 0;
-	gc_free gchar *data = b64_aes128_cbc_decrypt(cipher, password_key, &len);
+	gc_free gchar *data = b64_aes128_cbc_decrypt(cipher, s->password_key_save, &len);
 
 	if (!data || len < 4) {
 		g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Corrupted cache file");
@@ -5047,8 +5082,12 @@ gboolean mega_session_load(struct mega_session *s, const gchar *un, const gchar 
 
 		// return sid value if available
 		gc_free gchar *sid = s_json_get_member_string(cache_obj, "sid");
-		if (last_sid && sid)
+		if (last_sid)
 			*last_sid = g_strdup(sid);
+
+		gc_free gchar *password_salt_v2 = s_json_get_member_string(cache_obj, "password_salt_v2");
+		if (last_pwsalt_v2)
+			*last_pwsalt_v2 = g_strdup(password_salt_v2);
 
 		// check max_age
 		if (max_age > 0) {
@@ -5062,8 +5101,13 @@ gboolean mega_session_load(struct mega_session *s, const gchar *un, const gchar 
 		gsize len;
 
 		s->last_refresh = last_refresh;
+
 		s->sid = sid;
 		sid = NULL;
+
+		s->password_salt_v2 = password_salt_v2;
+		password_salt_v2 = NULL;
+
 		s->password_key = s_json_get_member_bytes(cache_obj, "password_key", &len);
 		s->master_key = s_json_get_member_bytes(cache_obj, "master_key", &len);
 		s_json_get_member_rsa_key(cache_obj, "rsa_key", &s->rsa_key);

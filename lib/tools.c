@@ -650,8 +650,7 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 struct mega_session *tool_start_session(ToolSessionFlags flags)
 {
 	GError *local_err = NULL;
-	gchar *sid = NULL;
-	gboolean loaded = FALSE;
+	gboolean is_new_session;
 
 	struct mega_session *s = mega_session_new();
 
@@ -675,29 +674,16 @@ struct mega_session *tool_start_session(ToolSessionFlags flags)
 		goto err;
 	}
 
-	// try to load cached session data (they are valid for 10 minutes since last
-	// user_get or refresh)
-	if (!mega_session_load(s, opt_username, opt_password, cache_timout, &sid, &local_err)) {
-		g_clear_error(&local_err);
-
-		if (!mega_session_open(s, opt_username, opt_password, sid, &local_err)) {
-			g_printerr("ERROR: Can't login to mega.nz: %s\n", local_err->message);
-			goto err;
-		}
-
-		if (!(flags & TOOL_SESSION_AUTH_ONLY)) {
-			if (!mega_session_refresh(s, &local_err)) {
-				g_printerr("ERROR: Can't read filesystem info from mega.nz: %s\n", local_err->message);
-				goto err;
-			}
-
-			loaded = TRUE;
-		}
-
-		mega_session_save(s, NULL);
+	// open the session
+	if (!mega_session_open(s, opt_username, opt_password, cache_timout, &is_new_session, &local_err)) {
+		g_printerr("ERROR: Can't login to mega.nz: %s\n", local_err->message);
+		goto err;
 	}
 
-	if (!(flags & TOOL_SESSION_AUTH_ONLY) && opt_reload_files && !loaded) {
+	if (is_new_session)
+		mega_session_save(s, NULL);
+
+	if (!(flags & TOOL_SESSION_AUTH_ONLY) && (opt_reload_files || is_new_session)) {
 		if (!mega_session_refresh(s, &local_err)) {
 			g_printerr("ERROR: Can't read filesystem info from mega.nz: %s\n", local_err->message);
 			goto err;
@@ -709,13 +695,11 @@ struct mega_session *tool_start_session(ToolSessionFlags flags)
 	mega_session_enable_previews(s, !!opt_enable_previews);
 	mega_session_set_resume(s, !opt_disable_resume);
 
-	g_free(sid);
 	return s;
 
 err:
 	mega_session_free(s);
 	g_clear_error(&local_err);
-	g_free(sid);
 	return NULL;
 }
 
