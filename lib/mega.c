@@ -45,7 +45,7 @@ DEFINE_CLEANUP_FUNCTION_NULL(BN_CTX *, BN_CTX_free)
 DEFINE_CLEANUP_FUNCTION_NULL(BIGNUM *, BN_free)
 #define gc_bn_free CLEANUP(BN_free)
 
-#define CACHE_FORMAT_VERSION 3
+#define CACHE_FORMAT_VERSION 4
 
 gint mega_debug = 0;
 
