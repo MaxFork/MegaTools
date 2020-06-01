@@ -58,10 +58,12 @@ int main(int ac, char *av[])
 	if (g_str_has_prefix(cmd_basename, "mega"))
 		cmd_name = cmd_basename + 4;
 
-	// try to run a specifc <command> if we're run via mega<command>[.exe]
-	for (int i = 0; i < G_N_ELEMENTS(tools); i++) {
-		if (!strcmp(cmd_name, tools[i]->name))
-			return tools[i]->main(ac, av);
+	if (cmd_name) {
+		// try to run a specifc <command> if we're run via mega<command>[.exe]
+		for (int i = 0; i < G_N_ELEMENTS(tools); i++) {
+			if (!strcmp(cmd_name, tools[i]->name))
+				return tools[i]->main(ac, av);
+		}
 	}
 
 	if (ac > 1) {
