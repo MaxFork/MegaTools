@@ -71,10 +71,14 @@ static int put_main(int ac, char *av[])
 			if (!opt_noprogress && tool_is_stdout_tty())
 				g_print("\r" ESC_CLREOL "\n");
 
+			if (g_error_matches(local_err, MEGA_ERROR, MEGA_ERROR_EXISTS)) {
+				status = 2;
+			} else {
+				status = 1;
+			}
+
 			g_printerr("ERROR: Upload failed for '%s': %s\n", path, local_err->message);
 			g_clear_error(&local_err);
-
-			status = 1;
 		} else {
 			if (!opt_noprogress) {
 				if (tool_is_stdout_tty())
