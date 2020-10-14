@@ -139,14 +139,28 @@ static gint* parse_number_list(const gchar* input, gint* count)
 		return NULL;
 
 	gchar** tokens = g_regex_split(re, input, 0);
-	guint i = 0, n_tokens = g_strv_length(tokens);
+	guint i = 0, j = 0, n_tokens = g_strv_length(tokens), n_nums = n_tokens;
 	gint* nums = g_new0(gint, n_tokens);
 
 	*count = 0;
-        while (i < n_tokens) {
+	while (i < n_tokens) {
 		if (g_regex_match_simple("^\\d{1,7}$", tokens[i], 0, 0)) {
 			nums[*count] = atoi(tokens[i]);
 			*count += 1;
+		} else if (g_regex_match_simple("^\\d{1,7}-\\d{1,7}$", tokens[i], 0, 0)) {
+			gchar** tokens_range = g_regex_split_simple("-", tokens[i], 0, 0);
+			int min = atoi(tokens_range[0]), max = atoi(tokens_range[1]);
+			if (min < max) {
+				n_nums += max - min;
+				nums = g_renew(gint, nums, n_nums);
+				for (j = min; j <= max; ++j) {
+					nums[*count] = j;
+					*count += 1;
+				}
+			} else {
+				g_printerr("WARNING: Skipping empty range '%s'\n", tokens[i]);
+			}
+			g_strfreev(tokens_range);
 		} else {
 			g_printerr("WARNING: Skipping non-numeric value '%s'\n", tokens[i]);
 		}
@@ -162,7 +176,7 @@ static GSList *prompt_and_filter_nodes(GSList *nodes)
 {
 	GSList *chosen_nodes = NULL;
 
-        gc_free gchar* input = tool_prompt_input();
+	gc_free gchar* input = tool_prompt_input();
 	if (input == NULL)
 		return g_slist_copy(nodes);
 
@@ -278,7 +292,7 @@ static GSList* pick_nodes(void)
 		position++;
 	}
 
-	g_print("Enter numbers of files or folders to download separated by spaces (or type 'all' to download everything):\n> ");
+	g_print("Enter numbers of files or folders to download separated by spaces (or type 'all' to download everything, or a range with two numbers separated by '-'):\n> ");
 
 	chosen_nodes = prompt_and_filter_nodes(nodes);
 
