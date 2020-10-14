@@ -150,17 +150,25 @@ static gint* parse_number_list(const gchar* input, gint* count)
 		} else if (g_regex_match_simple("^\\d{1,7}-\\d{1,7}$", tokens[i], 0, 0)) {
 			gchar** tokens_range = g_regex_split_simple("-", tokens[i], 0, 0);
 			int min = atoi(tokens_range[0]), max = atoi(tokens_range[1]);
-			if (min < max) {
-				n_nums += max - min;
+			g_strfreev(tokens_range);
+
+			if (min > max) {
+				int tmp = max;
+				max = min;
+				min = tmp;
+			}
+
+			if ((max - min) > 5000) {
+				g_printerr("WARNING: Skipping suspiciously large range '%s'\n", tokens[i]);
+			} else {
+				n_nums += max - min + 1;
 				nums = g_renew(gint, nums, n_nums);
+
 				for (j = min; j <= max; ++j) {
 					nums[*count] = j;
 					*count += 1;
 				}
-			} else {
-				g_printerr("WARNING: Skipping empty range '%s'\n", tokens[i]);
 			}
-			g_strfreev(tokens_range);
 		} else {
 			g_printerr("WARNING: Skipping non-numeric value '%s'\n", tokens[i]);
 		}
