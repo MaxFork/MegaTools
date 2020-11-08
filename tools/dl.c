@@ -367,6 +367,7 @@ static struct {
 	{ "^https?://mega\\.nz/file/([a-z0-9_-]{8})#([a-z0-9_-]{43})$", LINK_FILE },
 	{ "^https?://mega(?:\\.co)?\\.nz/#F!([a-z0-9_-]{8})!([a-z0-9_-]{22})(?:[!?]([a-z0-9_-]{8}))?$", LINK_FOLDER },
 	{ "^https?://mega\\.nz/folder/([a-z0-9_-]{8})#([a-z0-9_-]{22})/file/([a-z0-9_-]{8})$", LINK_FOLDER },
+	{ "^https?://mega\\.nz/folder/([a-z0-9_-]{8})#([a-z0-9_-]{22})/folder/([a-z0-9_-]{8})$", LINK_FOLDER },
 	{ "^https?://mega\\.nz/folder/([a-z0-9_-]{8})#([a-z0-9_-]{22})$", LINK_FOLDER },
 };
 
