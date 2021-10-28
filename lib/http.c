@@ -168,6 +168,8 @@ struct http *http_new(void)
 
 	curl_easy_setopt(h->curl, CURLOPT_BUFFERSIZE, 256 * 1024L);
 
+	curl_easy_setopt(h->curl, CURLOPT_SSL_SESSIONID_CACHE, 0L);
+
 #if CURL_AT_LEAST_VERSION(7, 44, 0)
 	const gchar* pkp_disable = g_getenv("MEGATOOLS_PKP_DISABLE");
 	if (pkp_disable == NULL || strcmp(pkp_disable, "1")) {
