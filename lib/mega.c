@@ -1621,15 +1621,8 @@ static void build_node_tree(struct mega_session *s)
 	for (i = s->fs_nodes; i; i = i->next) {
 		struct mega_node *n = i->data;
 
-#if GLIB_CHECK_VERSION(2, 40, 0)
 		if (!g_hash_table_insert(handle_map, n->handle, n))
 			g_printerr("WARNING: Dup node handle detected %s\n", n->handle);
-#else
-		if (g_hash_table_lookup(handle_map, n->handle))
-			g_printerr("WARNING: Dup node handle detected %s\n", n->handle);
-		else
-			g_hash_table_insert(handle_map, n->handle, n);
-#endif
 	}
 
 	for (i = s->fs_nodes; i;) {

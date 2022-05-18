@@ -43,7 +43,7 @@ static int rm_main(int ac, char *av[])
 
 	gint i, status = 0;
 	for (i = 1; i < ac; i++) {
-		gc_free gchar *path = tool_convert_filename(av[i], FALSE);
+		gchar *path = av[i];
 
 		if (!mega_session_rm(s, path, &local_err)) {
 			g_printerr("ERROR: Can't remove %s: %s\n", path, local_err->message);

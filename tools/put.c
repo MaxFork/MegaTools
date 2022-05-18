@@ -61,7 +61,7 @@ static int put_main(int ac, char *av[])
 	gint status = 0;
 	gint i;
 	for (i = 1; i < ac; i++) {
-		gc_free gchar *path = tool_convert_filename(av[i], TRUE);
+		gchar *path = av[i];
 
 		g_free(cur_file);
 		cur_file = g_path_get_basename(path);

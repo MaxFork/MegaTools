@@ -448,8 +448,7 @@ static int dl_main(int ac, char *av[])
 
 	// process links
 	for (i = 1; i < ac; i++) {
-		gc_free gchar *link_utf8 = tool_convert_filename(av[i], FALSE);
-		gc_free gchar *link = g_uri_unescape_string(link_utf8, NULL);
+		gc_free gchar *link = g_uri_unescape_string(av[i], NULL);
 		struct mega_link l;
 
 		if (!parse_link(link, &l)) {

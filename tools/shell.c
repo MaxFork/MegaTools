@@ -21,6 +21,12 @@
 #include "shell.h"
 #include "config.h"
 #include "lib/alloc.h"
+#ifdef G_OS_WIN32
+#include <stdio.h>
+#include <stdlib.h>
+#include <windows.h>
+#endif
+#include <locale.h>
 
 extern struct shell_tool shell_tool_df;
 extern struct shell_tool shell_tool_dl;
@@ -48,8 +54,47 @@ static struct shell_tool* tools[] = {
 	&shell_tool_reg,
 };
 
+#ifdef G_OS_WIN32
+static unsigned int initial_cp;
+
+static void print_no_convert(const gchar *buf)
+{
+	fputs(buf, stdout);
+	fflush(stdout);
+}
+
+static void printerr_no_convert(const gchar *buf)
+{
+	fputs(buf, stderr);
+	fflush(stderr);
+}
+
+static void restore_console(void)
+{
+	SetConsoleOutputCP(initial_cp);
+}
+#endif
+
 int main(int ac, char *av[])
 {
+#ifdef G_OS_WIN32
+	setlocale(LC_ALL, "C");
+
+	av = g_win32_get_command_line();
+	ac = g_strv_length(av);
+
+	g_set_print_handler(print_no_convert);
+	g_set_printerr_handler(printerr_no_convert);
+
+	initial_cp = GetConsoleOutputCP();
+	SetConsoleOutputCP(CP_UTF8);
+	atexit(restore_console);
+#else
+	setlocale(LC_ALL, "");
+
+	av = g_strdupv(av);
+#endif
+
 	gc_free gchar* cmd_basename = g_path_get_basename(av[0]);
 	gchar* cmd_name = NULL;
 

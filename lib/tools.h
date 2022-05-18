@@ -46,7 +46,6 @@ struct mega_session *tool_start_session(ToolSessionFlags flags);
 void tool_fini(struct mega_session *s);
 
 void tool_show_progress(const gchar *file, const struct mega_status_data *data);
-gchar *tool_convert_filename(const gchar *path, gboolean local);
 gboolean tool_is_stdout_tty(void);
 gchar* tool_prompt_input(void);
 
