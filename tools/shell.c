@@ -135,7 +135,7 @@ int main(int ac, char *av[])
 
 	g_print("\n");
 	g_print("megatools " VERSION " - command line tools for Mega.nz\n");
-	g_print("Written by Ondrej Jirman <megous@megous.com>, 2013-2018\n");
+	g_print("Written by Ondrej Jirman <megous@megous.com>, 2013-2022\n");
 	g_print("Go to http://megatools.megous.com for more information\n");
 	return 1;
 }

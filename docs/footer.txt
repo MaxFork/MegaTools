@@ -28,6 +28,6 @@ archive, so be careful what you say or send.
 AUTHOR
 ------
 
-Megatools was written by Ondrej Jirman <megatools@megous.com>, 2013-2019.
+Megatools was written by Ondrej Jirman <megatools@megous.com>, 2013-2022.
 
 Official website is link:http://megatools.megous.com[].

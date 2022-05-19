@@ -1,18 +1,113 @@
-megatools 1.10.3 - 2018-08-??
+megatools 1.11.0 - 2022-05-19
 =============================
 
 This release introduces new features.
 
 Improvements:
+
 - Megatools now install a single `megatools` executable, where former
   `megaXYZ ...` commands now have to be executed as `megatools XYZ ...`.
 - Implemented PKP (public key pinning for mega.nz's API server). Megatools
   no longer use public certificate authorities to verify API server's
   authenticity. If you use software that MITM's your web traffic, megatools
   will not allow this anymore.
+- Windows builds no longer need any special console setup to support UTF-8.
+  It just works out of the box.
+- Support new public folder URLs in `dl`
+- Build system moved to meson
+- New `test` command for checking if file exists
+- New `export` command for creating public links for private files
+- Login v2 support
+- Upload reliability improvements
 
-Fixes:
-- 
+Commit list:
+
+9294db2 Improve support for UTF-8 on windows
+82833a2 Use g_memdup2
+4adc57f Try disabling TLS session ID cache (may fix #462)
+3f59e27 add support for newstyle folders
+8b759a3 Cleanup the dl range code
+e299c43 Add range selection to the downloader
+539ff6f Return status = 2 if uploaded file already exists
+c0bd7ef Add file exists error type
+8d91a61 Fix NULL pointer dereference when invoking megatools in some situations
+57cddce Bump cache format version
+1737c55 Cleanup login v2 support and fix session caching
+bf886a4 Add contributed support for v2 login flow
+e4e8495 dl: Support new link format for individual files inside folders
+fe6d818 dl: Add support for new link formats
+8296db8 Update README with new build information/git repository link
+471a3cf Make doc generator programs optional
+9e47ad4 Move to meson buildystem
+eae38e9 Drop github issue template
+a9af5d8 Update PGP fingerprint
+1f52c9c We need to follow symlinks on local paths in megatools dl
+8bbc21c Mark some functions as static
+32bd83a Change e-mail/website addresses
+2d9fe44 URL-decode links passed to the dl command #310
+cc91968 Add --ip-proto and --netif options
+f19cf39 Add export tool
+d3e1d58 Add megatools test tool
+f0bfefd Drop useless ;
+7735dd2 Fix grammar: data are -> data is
+99dfea8 Avoid new compiler warnings
+2c7e2a3 No need to iterate from the beginning when checking for invalid filename
+4e5ba97 Replace invalid filename characters with _ instead of a space
+1aeb275 Merge branch 'master' of github.com:megous/megatools
+956c11a Don't use alloca, avoid unbounded path construction
+c94277f Merge pull request #428 from 64617/fix-filename
+c91409c Don't immediately fail on invalid filename
+2cc7019 Fixes: 'megatools get', Output to STDOUT not working #423
+1012d6e Updated todo
+0faba1c Fix megatools rm not removing the child nodes from the fs_nodes
+65f8afd Don't free nodes too early #417
+a1c945c dl: Download exported files even if root is not a folder #417
+2ca921f Merge branch 'master' into x
+f651ba0 Revert "Support ....?.... URL scheme for single file downloads"
+d52d0ce Refactor update_pathmap_prune to make it clearer, fix memleaks
+7f2dcae Merge pull request #417 from mdirik/file-url
+c78d0d6 Support ....?.... URL scheme for single file downloads
+8758b65 Sort order of downloads #401
+8309767 Merge pull request #414 from taiyu-len/master
+978e4be Show file sizes in pick_nodes
+28a2fbe Drop libmega mentions #412
+1ea525e Fix download speed limit not being applied by curl if handle is re-used #380
+2b68a46 Fix implicitly declared function warnings in shell.c #406
+3c24b71 Add link for the experimental windows builds
+f218192 Optimize exported folder filesystem parsing #405
+0e21e38 Fix megac doc
+b04961d Fix parameter type to curl_easy_setopt
+ac07641 Fix for "Hardcoded colors affects readability" #404
+2255c5d Allow more retries during download (when over quota) #403
+0346e76 Add git warning/build instructions to autogen.sh
+548042e Add gc_tool_fini attribute
+653ba6c Fix alignment of exported links
+26a7a0d Add docbook-xml dependency #391
+3459d1f Update issue template
+1a7e3f4 Update README file for 1.11.0
+70c624e Don't download data when file already exists when using megadl #386
+5acf268 Add -std=c99 compiler flag
+a6df742 Always retry the upload, on any server returned error
+80e9767 Drop special handling of EAGAIN
+7827235 Report possibly transient failures from curl as HTTP_ERROR_COMM_FAILURE
+9c150b3 Bump version to 1.11.0-git
+3637555 Drop AC_PROG_RANLIB (libtool is enough)
+f6dcdf5 Don't be too silent
+095d284 Fix contact information
+d2c5c38 Improve build instructions #384
+b304d5c Use libtool to fix static linking
+d7b9037 Drop option groups
+a4f638e Fix a couple of typos
+b95ac5d Updated NEWS/TODO
+63771cd Drop dead autoconf code
+4437c0c Update megatools docs for the new command naming scheme
+852852b Add option to install compat links
+6cbd650 Build a single binary instead of a binary for each command
+6736622 Drop accent
+7ac9569 Bump the year
+ff0f5f1 We don't use gnutls/glib-networking anymore, drop unnecessary code
+07ba1f9 Implement public key pinning for the API server
+
 
 megatools 1.10.2 - 2018-07-31
 =============================
