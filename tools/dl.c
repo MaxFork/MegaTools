@@ -387,6 +387,8 @@ static gboolean parse_link(const char* url, struct mega_link* l)
 			l->handle = g_match_info_fetch(m, 1);
 			l->key = g_match_info_fetch(m, 2);
 			l->specific = g_match_info_fetch(m, 3);
+			if (l->specific && !l->specific[0])
+				g_clear_pointer(&l->specific, g_free);
 
 			g_clear_pointer(&m, g_match_info_unref);
 			return TRUE;
