@@ -873,7 +873,7 @@ static guchar *make_password_key(const gchar *password)
 			AES_KEY k;
 			guchar key[16] = { 0 }, pkey_tmp[16];
 
-			strncpy(key, password + i, 16); // this is fine, we don't need a NUL termination here, stfu gcc8!
+			memcpy(key, password + i, MIN(16, len - i));
 			AES_set_encrypt_key(key, 128, &k);
 			AES_encrypt(pkey, pkey_tmp, &k);
 			memcpy(pkey, pkey_tmp, 16);
