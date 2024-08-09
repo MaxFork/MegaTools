@@ -20,6 +20,51 @@ password.
 
 Mega website can be found at https://mega.nz.
 
+How To Build
+=============
 
+Run
+
+    ./build.sh
+
+The first time, it will build either using [**ninja**](https://ninja-build.org/) (if available)
+or GNU Make if it is not.
+
+After the initial time, it will stay active, waiting for changes to the *.c files,
+and will compile automatically.
+
+################## NOTICE ###########################
 # This has been forked and is actively maintained:
 https://github.com/BitBasket/megatools
+################## NOTICE ###########################
+
+Contributors
+============
+
+- Alberto Garcia <berto@igalia.com>
+- aurelien <aurelien.antunes@gmail.com>
+- bAndie91 <bandie9100@gmail.com>
+- Chris Tarazi <tarazichris@gmail.com>
+- cyrozap <cyrozap@gmail.com>
+- Dal1a <waveh@trimsj.com>
+- David Guillen Fandos <david@davidgf.net>
+- Erik Nordstrøm <erik@nordstroem.no>
+- ivesen <ivesen@ivesen.moe>
+- Johnathan Jenkins <john@nixheads.co.uk>
+- Kagami Hiiragi <kagami@genshiken.org>
+- Matthew Schultz <mattsch@gmail.com>
+- Max Base <maxbasecode@gmail.com>
+- Mert Dirik <mertdirik@gmail.com>
+- Michael Ledin <mledin89@gmail.com>
+- Michael Ripley <zkxs00@gmail.com>
+- nyuszika7h <nyuszika7h@gmail.com>
+- Palmer Dabbelt <palmer@dabbelt.com>
+- protomouse <root@protomou.se>
+- RealDolos <dolos@cock.li>
+- strupo <sheeit@users.noreply.github.com>
+- taiyu <taiyu.len@gmail.com>
+- Theodore R. Smith <theodore.smith@bitbasket.co>
+- Tom Maneiro <tomman@tsdx.net.ve>
+- Viktor (Icon) VAD <vad.viktor@gmail.com>
+- wdlkmpx <wdlkmpx@gmail.com>
+

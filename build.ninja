@@ -1,0 +1,95 @@
+# Variables
+cc = gcc
+#cc = $cc(gcc)
+cflags = -g -O2 -Wall -I./lib -I. `pkg-config --cflags glib-2.0 gobject-2.0 gio-2.0`
+ldflags = -lm `pkg-config --libs glib-2.0 gobject-2.0 gio-2.0 libcurl openssl`
+default_prefix = /usr/local
+
+# Rules
+rule cc
+  command = $cc $cflags -c $in -o $out
+  description = CC $out
+
+rule link
+  command = $cc $ldflags $in -o $out
+  description = LINK $out
+
+rule build-docs
+  command = make -C docs
+  description = Building documentation
+  pool = console
+
+# Clean rules
+rule clean-objects
+  command = rm -f .obj/lib/*.o .obj/tools/*.o lib/*.o tools/*.o
+  description = Cleaning object files
+
+rule clean-docs
+  command = rm -f docs/*.1
+  description = Cleaning documentation
+
+rule clean
+  command = rm -f .obj/lib/*.o .obj/tools/*.o megatools
+  description = Cleaning object files and executables
+
+rule clean-dist
+  command = ninja clean && ninja clean-docs && rm -f *.lo *.tab.c Makefile config.h stamp-h1 libtool config.lt config.status config.cache config.log configure.lineno config.status.lineno rm -rf ./autom4te.cache || true
+  description = Cleaning files created by ./configure and the build process
+  pool = console
+
+rule clean-pristine
+  command = ninja distclean && rm -rf m4 && rm -f Makefile.in aclocal.m4 compile config.guess config.h.in* config.sub configure configure.in depcomp install-sh ltmain.sh || true
+  description = Cleaning everything not in the git repo
+  pool = console
+
+rule build-autogen
+  command = ./autogen.sh
+  pool = console
+
+build config.h.in: build-autogen
+#build configure.ac: phony
+
+rule build-configure
+  command = ./configure --prefix=$PREFIX
+  description = Configuring with prefix $PREFIX
+  pool = console
+
+build config.h: build-configure | config.h.in
+  PREFIX = $default_prefix
+#build config.h: phony
+
+
+# Build targets
+build .obj/lib/http.o: cc lib/http.c | config.h
+build .obj/lib/mega.o: cc lib/mega.c | config.h
+build .obj/lib/sjson.o: cc lib/sjson.c | config.h
+build .obj/lib/sjson.gen.o: cc lib/sjson.gen.c | config.h
+build .obj/lib/tools.o: cc lib/tools.c | config.h
+build .obj/tools/copy.o: cc tools/copy.c | config.h
+build .obj/tools/df.o: cc tools/df.c | config.h
+build .obj/tools/dl.o: cc tools/dl.c | config.h
+build .obj/tools/export.o: cc tools/export.c | config.h
+build .obj/tools/get.o: cc tools/get.c | config.h
+build .obj/tools/ls.o: cc tools/ls.c | config.h
+build .obj/tools/mkdir.o: cc tools/mkdir.c | config.h
+build .obj/tools/put.o: cc tools/put.c | config.h
+build .obj/tools/reg.o: cc tools/reg.c | config.h
+build .obj/tools/rm.o: cc tools/rm.c | config.h
+build .obj/tools/shell.o: cc tools/shell.c | config.h
+build .obj/tools/test.o: cc tools/test.c | config.h
+
+#build docs/megatools-dl.1: build-docs
+build megatools: link .obj/lib/http.o .obj/lib/mega.o .obj/lib/sjson.gen.o .obj/lib/tools.o .obj/tools/copy.o .obj/tools/df.o .obj/tools/dl.o .obj/tools/export.o .obj/tools/get.o .obj/tools/ls.o .obj/tools/mkdir.o .obj/tools/put.o .obj/tools/reg.o .obj/tools/rm.o .obj/tools/shell.o .obj/tools/test.o | config.h
+
+build all: build-docs megatools | config.h
+
+build clean: clean
+
+build clean-docs: clean-docs
+
+build distclean: clean-dist
+
+build pristine: clean-pristine
+
+# Default target
+default all
