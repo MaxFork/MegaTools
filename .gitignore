@@ -32,3 +32,8 @@
 
 /docs/*.1
 /docs/*.5
+
+.ninja_log
+.idea/
+libtool
+ltmain.sh

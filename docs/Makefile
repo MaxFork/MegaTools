@@ -29,3 +29,7 @@ $(foreach cmd,$(COMMANDS),$(eval $(call MAN_template,megatools-$(cmd),1)))
 $(eval $(call MAN_template,megatools,1))
 $(eval $(call MAN_template,megarc,5))
 
+maintainer-clean:
+distclean:
+install-exec:
+install:

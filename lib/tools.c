@@ -20,7 +20,6 @@
 #include <curl/curl.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
-#include <locale.h>
 
 #include "config.h"
 #include "tools.h"
@@ -165,7 +164,6 @@ static void init_openssl_locking()
 	// OpenSSL >= 1.1.0-pre4 doesn't require specific callback setup
 }
 #else
-#if GLIB_CHECK_VERSION(2, 32, 0)
 
 static GMutex *openssl_mutexes = NULL;
 
@@ -198,55 +196,10 @@ static void init_openssl_locking()
 	CRYPTO_set_locking_callback(openssl_locking_callback);
 }
 
-#else
-
-static GMutex **openssl_mutexes = NULL;
-
-static void openssl_locking_callback(int mode, int type, const char *file, int line)
-{
-	if (mode & CRYPTO_LOCK)
-		g_mutex_lock(openssl_mutexes[type]);
-	else
-		g_mutex_unlock(openssl_mutexes[type]);
-}
-
-static unsigned long openssl_thread_id_callback()
-{
-	unsigned long ret;
-	ret = (unsigned long)g_thread_self();
-	return ret;
-}
-
-static void init_openssl_locking()
-{
-	gint i;
-
-	// initialize OpenSSL locking for multi-threaded operation
-	openssl_mutexes = g_new(GMutex *, CRYPTO_num_locks());
-	for (i = 0; i < CRYPTO_num_locks(); i++)
-		openssl_mutexes[i] = g_mutex_new();
-
-	SSL_library_init();
-	CRYPTO_set_id_callback(openssl_thread_id_callback);
-	CRYPTO_set_locking_callback(openssl_locking_callback);
-}
-
-#endif
 #endif
 
 static void init(void)
 {
-#if !GLIB_CHECK_VERSION(2, 32, 0)
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-#endif
-
-	setlocale(LC_ALL, "");
-
-#if !GLIB_CHECK_VERSION(2, 36, 0)
-	g_type_init();
-#endif
-
 	g_setenv("GSETTINGS_BACKEND", "memory", TRUE);
 
 #ifndef G_OS_WIN32
@@ -438,37 +391,16 @@ static void print_version(void)
 {
 	if (opt_version) {
 		g_print("megatools " VERSION " - command line tools for Mega.nz\n\n");
-		g_print("Written by Ondrej Jirman <megous@megous.com>, 2013-2018\n");
+		g_print("Written by Ondrej Jirman <megous@megous.com>, 2013-2022\n");
 		g_print("Go to http://megatools.megous.com for more information\n");
 		exit(0);
 	}
 }
 
-gchar *tool_convert_filename(const gchar *path, gboolean local)
-{
-	gchar *locale_path;
-
-#ifdef G_OS_WIN32
-	locale_path = g_locale_to_utf8(path, -1, NULL, NULL, NULL);
-#else
-	if (local)
-		locale_path = g_strdup(path);
-	else
-		locale_path = g_locale_to_utf8(path, -1, NULL, NULL, NULL);
-#endif
-
-	if (locale_path == NULL) {
-		g_printerr(
-			"ERROR: Invalid filename locale, can't convert file names specified on the command line to UTF-8.\n");
-		exit(1);
-	}
-
-	return locale_path;
-}
-
 void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool_entries, ToolInitFlags flags)
 {
 	GError *local_err = NULL;
+	gchar** args = NULL;
 
 	init();
 
@@ -488,11 +420,13 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 	g_option_context_add_main_entries(opt_context, network_options, NULL);
 	g_option_context_add_main_entries(opt_context, basic_options, NULL);
 
-	if (!g_option_context_parse(opt_context, ac, av, &local_err)) {
+	if (!g_option_context_parse_strv(opt_context, av, &local_err)) {
 		g_printerr("ERROR: Option parsing failed: %s\n", local_err->message);
 		g_clear_error(&local_err);
 		exit(1);
 	}
+
+	*ac = g_strv_length(*av);
 
 	print_version();
 
@@ -650,8 +584,7 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 struct mega_session *tool_start_session(ToolSessionFlags flags)
 {
 	GError *local_err = NULL;
-	gchar *sid = NULL;
-	gboolean loaded = FALSE;
+	gboolean is_new_session;
 
 	struct mega_session *s = mega_session_new();
 
@@ -675,29 +608,16 @@ struct mega_session *tool_start_session(ToolSessionFlags flags)
 		goto err;
 	}
 
-	// try to load cached session data (they are valid for 10 minutes since last
-	// user_get or refresh)
-	if (!mega_session_load(s, opt_username, opt_password, cache_timout, &sid, &local_err)) {
-		g_clear_error(&local_err);
-
-		if (!mega_session_open(s, opt_username, opt_password, sid, &local_err)) {
-			g_printerr("ERROR: Can't login to mega.nz: %s\n", local_err->message);
-			goto err;
-		}
-
-		if (!(flags & TOOL_SESSION_AUTH_ONLY)) {
-			if (!mega_session_refresh(s, &local_err)) {
-				g_printerr("ERROR: Can't read filesystem info from mega.nz: %s\n", local_err->message);
-				goto err;
-			}
-
-			loaded = TRUE;
-		}
-
-		mega_session_save(s, NULL);
+	// open the session
+	if (!mega_session_open(s, opt_username, opt_password, cache_timout, &is_new_session, &local_err)) {
+		g_printerr("ERROR: Can't login to mega.nz: %s\n", local_err->message);
+		goto err;
 	}
 
-	if (!(flags & TOOL_SESSION_AUTH_ONLY) && opt_reload_files && !loaded) {
+	if (is_new_session)
+		mega_session_save(s, NULL);
+
+	if (!(flags & TOOL_SESSION_AUTH_ONLY) && (opt_reload_files || is_new_session)) {
 		if (!mega_session_refresh(s, &local_err)) {
 			g_printerr("ERROR: Can't read filesystem info from mega.nz: %s\n", local_err->message);
 			goto err;
@@ -709,13 +629,11 @@ struct mega_session *tool_start_session(ToolSessionFlags flags)
 	mega_session_enable_previews(s, !!opt_enable_previews);
 	mega_session_set_resume(s, !opt_disable_resume);
 
-	g_free(sid);
 	return s;
 
 err:
 	mega_session_free(s);
 	g_clear_error(&local_err);
-	g_free(sid);
 	return NULL;
 }
 

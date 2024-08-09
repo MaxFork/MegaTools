@@ -1,5 +1,7 @@
 # global flags
 
+SUBDIRS = docs
+
 COMMANDS = df dl get ls test export mkdir put reg rm copy
 
 ACLOCAL_AMFLAGS = -I m4
@@ -23,7 +25,6 @@ LDADD = \
 EXTRA_DIST = lib/sjson.c
 
 bin_PROGRAMS = megatools
-
 megatools_SOURCES = \
 	lib/sjson.gen.c \
 	lib/sjson.h \
@@ -49,6 +50,9 @@ megatools_SOURCES = \
 	tools/shell.c \
 	tools/shell.h
 
+# Use an object directory
+AUTOMAKE_OPTIONS = subdir-objects
+
 if INSTALL_COMPAT_SYMLINKS
 
 install-exec-hook:
@@ -59,6 +63,14 @@ install-exec-hook:
 	done
 
 endif
+
+# Cleanup rule to remove .o files
+clean-objects:
+	@echo "Cleaning up object files..."
+	rm -f ./lib/*.o ./tools/*.o
+
+# Hook the cleanup rule after the installation
+install: all install-exec clean-objects
 
 # docs
 

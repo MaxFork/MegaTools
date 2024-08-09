@@ -56,7 +56,7 @@ static int test_main(int ac, char *av[])
 	}
 	
 	for (gint j = 1; j < ac; j++) {
-		gc_free gchar *path = tool_convert_filename(av[j], FALSE);
+		gchar *path = av[j];
 		struct mega_node *n = mega_session_stat(s, path);
 		
 		if (!n) {

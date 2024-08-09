@@ -99,7 +99,7 @@ static int get_main(int ac, char *av[])
 	}
 
 	for (i = 1; i < ac; i++) {
-		gc_free gchar *path = tool_convert_filename(av[i], FALSE);
+		gchar *path = av[i];
 
 		// perform download
 		if (!mega_session_get_compat(s, opt_path, path, &local_err)) {

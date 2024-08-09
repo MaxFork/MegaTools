@@ -1,3 +1,3 @@
 --disable-resume::
-	Don't resume downloads from partially dowloaded file. Default is to
+	Don't resume downloads from partially downloaded file. Default is to
 	resume.

@@ -79,7 +79,7 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file)
 			return FALSE;
 		}
 	} else {
-		if (g_file_query_file_type(parent, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL) != G_FILE_TYPE_DIRECTORY) {
+		if (g_file_query_file_type(parent, 0, NULL) != G_FILE_TYPE_DIRECTORY) {
 			g_printerr("ERROR: Can't create local directory %s: a file exists there!\n", parent_path);
 			return FALSE;
 		}
@@ -139,14 +139,36 @@ static gint* parse_number_list(const gchar* input, gint* count)
 		return NULL;
 
 	gchar** tokens = g_regex_split(re, input, 0);
-	guint i = 0, n_tokens = g_strv_length(tokens);
+	guint i = 0, j = 0, n_tokens = g_strv_length(tokens), n_nums = n_tokens;
 	gint* nums = g_new0(gint, n_tokens);
 
 	*count = 0;
-        while (i < n_tokens) {
+	while (i < n_tokens) {
 		if (g_regex_match_simple("^\\d{1,7}$", tokens[i], 0, 0)) {
 			nums[*count] = atoi(tokens[i]);
 			*count += 1;
+		} else if (g_regex_match_simple("^\\d{1,7}-\\d{1,7}$", tokens[i], 0, 0)) {
+			gchar** tokens_range = g_regex_split_simple("-", tokens[i], 0, 0);
+			int min = atoi(tokens_range[0]), max = atoi(tokens_range[1]);
+			g_strfreev(tokens_range);
+
+			if (min > max) {
+				int tmp = max;
+				max = min;
+				min = tmp;
+			}
+
+			if ((max - min) > 5000) {
+				g_printerr("WARNING: Skipping suspiciously large range '%s'\n", tokens[i]);
+			} else {
+				n_nums += max - min + 1;
+				nums = g_renew(gint, nums, n_nums);
+
+				for (j = min; j <= max; ++j) {
+					nums[*count] = j;
+					*count += 1;
+				}
+			}
 		} else {
 			g_printerr("WARNING: Skipping non-numeric value '%s'\n", tokens[i]);
 		}
@@ -162,7 +184,7 @@ static GSList *prompt_and_filter_nodes(GSList *nodes)
 {
 	GSList *chosen_nodes = NULL;
 
-        gc_free gchar* input = tool_prompt_input();
+	gc_free gchar* input = tool_prompt_input();
 	if (input == NULL)
 		return g_slist_copy(nodes);
 
@@ -214,7 +236,7 @@ static gint compare_node(struct mega_node *a, struct mega_node *b)
 	return 0;
 }
 
-GSList* prune_children(GSList* nodes)
+static GSList* prune_children(GSList* nodes)
 {
 	GSList* pruned = NULL, *it, *it2;
 
@@ -245,7 +267,7 @@ prune_node:;
 	return g_slist_reverse(pruned);
 }
 
-GSList* pick_nodes(void)
+static GSList* pick_nodes(void)
 {
 	GSList *nodes = mega_session_ls(s, "/", TRUE), *it, *chosen_nodes;
 	int position = 2;
@@ -278,7 +300,7 @@ GSList* pick_nodes(void)
 		position++;
 	}
 
-	g_print("Enter numbers of files or folders to download separated by spaces (or type 'all' to download everything):\n> ");
+	g_print("Enter numbers of files or folders to download separated by spaces (or type 'all' to download everything, or a range with two numbers separated by '-'):\n> ");
 
 	chosen_nodes = prompt_and_filter_nodes(nodes);
 
@@ -322,10 +344,73 @@ static gboolean dl_sync_dir_choose(GFile *local_dir)
 	return status;
 }
 
+enum {
+	LINK_NONE,
+	LINK_FILE,
+	LINK_FOLDER,
+};
+
+struct mega_link
+{
+	int type;
+	gchar *key;
+	gchar *handle;
+	gchar *specific;
+};
+
+static struct {
+	const char* pattern;
+	int type;
+	GRegex* re;
+} link_regexes[] = {
+	{ "^https?://mega(?:\\.co)?\\.nz/#!([a-z0-9_-]{8})!([a-z0-9_=-]{43}={0,2})$", LINK_FILE },
+	{ "^https?://mega\\.nz/file/([a-z0-9_-]{8})#([a-z0-9_-]{43}={0,2})$", LINK_FILE },
+	{ "^https?://mega(?:\\.co)?\\.nz/#F!([a-z0-9_-]{8})!([a-z0-9_-]{22})(?:[!?]([a-z0-9_-]{8}))?$", LINK_FOLDER },
+	{ "^https?://mega\\.nz/folder/([a-z0-9_-]{8})#([a-z0-9_-]{22})/file/([a-z0-9_-]{8})$", LINK_FOLDER },
+	{ "^https?://mega\\.nz/folder/([a-z0-9_-]{8})#([a-z0-9_-]{22})/folder/([a-z0-9_-]{8})$", LINK_FOLDER },
+	{ "^https?://mega\\.nz/folder/([a-z0-9_-]{8})#([a-z0-9_-]{22})$", LINK_FOLDER },
+};
+
+static gboolean parse_link(const char* url, struct mega_link* l)
+{
+	GMatchInfo *m = NULL;
+	int i;
+
+	for (i = 0; i < G_N_ELEMENTS(link_regexes); i++) {
+		if (!link_regexes[i].re) {
+			link_regexes[i].re = g_regex_new(link_regexes[i].pattern, G_REGEX_CASELESS, 0, NULL);
+			g_assert(link_regexes[i].re != NULL);
+		}
+
+		if (g_regex_match(link_regexes[i].re, url, 0, &m)) {
+			l->type = link_regexes[i].type;
+			l->handle = g_match_info_fetch(m, 1);
+			l->key = g_match_info_fetch(m, 2);
+			l->specific = g_match_info_fetch(m, 3);
+			if (l->specific && !l->specific[0])
+				g_clear_pointer(&l->specific, g_free);
+
+			g_clear_pointer(&m, g_match_info_unref);
+			return TRUE;
+		}
+
+		g_clear_pointer(&m, g_match_info_unref);
+	}
+
+	return FALSE;
+}
+
+static void free_link(struct mega_link* l)
+{
+	g_free(l->key);
+	g_free(l->handle);
+	g_free(l->specific);
+	memset(l, 0, sizeof(*l));
+}
+
 static int dl_main(int ac, char *av[])
 {
 	gc_error_free GError *local_err = NULL;
-	gc_regex_unref GRegex *file_regex = NULL, *folder_regex = NULL;
 	gint i;
 	int status = 0;
 
@@ -353,17 +438,6 @@ static int dl_main(int ac, char *av[])
 		return 1;
 	}
 
-	// prepare link parsers
-
-	file_regex = g_regex_new("^https?://mega(?:\\.co)?\\.nz/#!([a-z0-9_-]{8})!([a-z0-9_-]{43})$", G_REGEX_CASELESS,
-				 0, NULL);
-	g_assert(file_regex != NULL);
-
-	folder_regex =
-		g_regex_new("^https?://mega(?:\\.co)?\\.nz/#F!([a-z0-9_-]{8})!([a-z0-9_-]{22})(?:[!?]([a-z0-9_-]{8}))?$",
-			    G_REGEX_CASELESS, 0, NULL);
-	g_assert(folder_regex != NULL);
-
 	// create session
 
 	s = tool_start_session(TOOL_SESSION_OPEN | TOOL_SESSION_AUTH_ONLY | TOOL_SESSION_AUTH_OPTIONAL);
@@ -376,27 +450,16 @@ static int dl_main(int ac, char *av[])
 
 	// process links
 	for (i = 1; i < ac; i++) {
-		gc_match_info_unref GMatchInfo *m1 = NULL;
-		gc_match_info_unref GMatchInfo *m2 = NULL;
-		gc_free gchar *key = NULL;
-		gc_free gchar *handle = NULL;
-		gc_free gchar *specific = NULL;
-		gc_free gchar *link = tool_convert_filename(av[i], FALSE);
+		gc_free gchar *link = g_uri_unescape_string(av[i], NULL);
+		struct mega_link l;
 
-		// Codes can move to tools.c (tool convert filename function)
-		link = g_uri_unescape_string(link, NULL);
-		/*
-			INPUT: https://mega.nz/#%21H2pDmAgC!isXGprskZbLP4KnLNuNHcbI279s6FnLcsj8Vydm_sio
-			OUTPUT: https://mega.nz/#!H2pDmAgC!isXGprskZbLP4KnLNuNHcbI279s6FnLcsj8Vydm_sio
-		*/
-		// link = g_uri_unescape_string("https://mega.nz/#%21H2pDmAgC!isXGprskZbLP4KnLNuNHcbI279s6FnLcsj8Vydm_sio", NULL);
-
-		if (g_regex_match(file_regex, link, 0, &m1)) {
-			handle = g_match_info_fetch(m1, 1);
-			key = g_match_info_fetch(m1, 2);
-
+		if (!parse_link(link, &l)) {
+			g_printerr("WARNING: Skipping invalid Mega download link: %s\n", link);
+			continue;
+		}
+		if (l.type == LINK_FILE) {
 			// perform download
-			if (!mega_session_dl_compat(s, handle, key, opt_stream ? NULL : opt_path, &local_err)) {
+			if (!mega_session_dl_compat(s, l.handle, l.key, opt_stream ? NULL : opt_path, &local_err)) {
 				if (!opt_noprogress && tool_is_stdout_tty())
 					g_print("\r" ESC_CLREOL "\n");
 				g_printerr("ERROR: Download failed for '%s': %s\n", link, local_err->message);
@@ -412,19 +475,15 @@ static int dl_main(int ac, char *av[])
 				if (opt_print_names)
 					g_print("%s\n", cur_file);
 			}
-		} else if (g_regex_match(folder_regex, link, 0, &m2)) {
+		} else if (l.type == LINK_FOLDER) {
 			if (opt_stream) {
 				g_printerr("ERROR: Can't stream from a directory!\n");
 				tool_fini(s);
 				return 1;
 			}
 
-			handle = g_match_info_fetch(m2, 1);
-			key = g_match_info_fetch(m2, 2);
-			specific = g_match_info_fetch(m2, 3);
-
 			// perform download
-			if (!mega_session_open_exp_folder(s, handle, key, specific, &local_err)) {
+			if (!mega_session_open_exp_folder(s, l.handle, l.key, l.specific, &local_err)) {
 				g_printerr("ERROR: Can't open folder '%s': %s\n", link, local_err->message);
 				g_clear_error(&local_err);
 				status = 1;
@@ -436,8 +495,7 @@ static int dl_main(int ac, char *av[])
 					struct mega_node *root_node = l->data;
 
 					gc_object_unref GFile *local_dir = g_file_new_for_path(opt_path);
-					if (g_file_query_file_type(local_dir, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-								   NULL) == G_FILE_TYPE_DIRECTORY) {
+					if (g_file_query_file_type(local_dir, 0, NULL) == G_FILE_TYPE_DIRECTORY) {
 						if (opt_choose_files) {
 							if (!dl_sync_dir_choose(local_dir))
 								status = 1;
@@ -463,8 +521,10 @@ static int dl_main(int ac, char *av[])
 				g_slist_free(l);
 			}
 		} else {
-			g_printerr("WARNING: Skipping invalid Mega download link: %s\n", link);
+			g_printerr("WARNING: Skipping invalid Mega download link type: %s\n", link);
 		}
+
+		free_link(&l);
 	}
 
 	tool_fini(s);
